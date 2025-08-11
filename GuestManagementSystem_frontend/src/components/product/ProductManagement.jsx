@@ -722,6 +722,299 @@ const ProductManagementPage = () => {
                 />
             )}
 
+
+            {showDetailModal && selectedProductDetail && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+                    <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Modal Header */}
+                        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
+                            <div className="flex items-center m">
+                                {selectedProductDetail.image ? (
+                                    <img
+                                        className="h-12 w-12 rounded-lg object-cover mr-3"
+                                        src={getImageUrl(selectedProductDetail.image.replace(/^https?:\/\/[^/]+/, ''))}
+                                        alt={selectedProductDetail.name}
+                                    />
+                                ) : (
+                                    <div className="h-12 w-12 rounded-lg bg-amber-100 flex items-center justify-center mr-4">
+                                        <Package className="h-6 w-6 text-amber-600" />
+                                    </div>
+                                )}
+                                <div>
+                                    <h3 className="text-xl font-semibold text-gray-900">
+                                        {selectedProductDetail.name}
+                                    </h3>
+                                    <p className="text-sm text-gray-600">Product Details</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={closeDetailModal}
+                                className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="p-6">
+                            {/* Status and Basic Info */}
+                            <div className="mb-8 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h4 className="text-lg font-medium text-gray-900">Product Code: {selectedProductDetail.product_code}</h4>
+                                        <p className="text-sm text-gray-600">Hotel Product</p>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(selectedProductDetail.is_active)}`}>
+                                            {selectedProductDetail.is_active ? (
+                                                <CheckCircle className="h-4 w-4 mr-2" />
+                                            ) : (
+                                                <XCircle className="h-4 w-4 mr-2" />
+                                            )}
+                                            {selectedProductDetail.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStockStatusColor(selectedProductDetail.quantity)}`}>
+                                            <Box className="h-4 w-4 mr-2" />
+                                            {getStockStatusText(selectedProductDetail.quantity)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Quick Stats */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                                        <DollarSign className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                                        <p className="text-xs font-medium text-gray-500 uppercase">Price</p>
+                                        <p className="text-sm font-semibold text-gray-900">${selectedProductDetail.price}</p>
+                                    </div>
+                                    <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                                        <DollarSign className="h-6 w-6 text-amber-600 mx-auto mb-2" />
+                                        <p className="text-xs font-medium text-gray-500 uppercase">Cost</p>
+                                        <p className="text-sm font-semibold text-gray-900">${selectedProductDetail.cost}</p>
+                                    </div>
+                                    <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                                        <Box className="h-6 w-6 text-blue-600 mx-auto mb-2" />
+                                        <p className="text-xs font-medium text-gray-500 uppercase">Stock</p>
+                                        <p className="text-sm font-semibold text-gray-900">{selectedProductDetail.quantity}</p>
+                                    </div>
+                                    <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                                        <Calendar className="h-6 w-6 text-purple-600 mx-auto mb-2" />
+                                        <p className="text-xs font-medium text-gray-500 uppercase">Created</p>
+                                        <p className="text-sm font-semibold text-gray-900">
+                                            {new Date(selectedProductDetail.created_at || Date.now()).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Information Sections */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Product Information */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                    <div className="flex items-center mb-4">
+                                        <Package className="h-5 w-5 text-amber-600 mr-2" />
+                                        <h5 className="text-lg font-medium text-gray-900">Product Information</h5>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Product Code</p>
+                                            <div className="flex items-center mt-1">
+                                                <Hash className="h-4 w-4 text-gray-400 mr-2" />
+                                                <p className="text-sm text-gray-900 font-mono">{selectedProductDetail.product_code}</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Product Name</p>
+                                            <p className="text-sm text-gray-900">{selectedProductDetail.name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Description</p>
+                                            <p className="text-sm text-gray-900">{selectedProductDetail.description || 'No description provided'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</p>
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border mt-1 ${getStatusColor(selectedProductDetail.is_active)}`}>
+                                                {selectedProductDetail.is_active ? (
+                                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                                ) : (
+                                                    <XCircle className="h-3 w-3 mr-1" />
+                                                )}
+                                                {selectedProductDetail.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Pricing Information */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                    <div className="flex items-center mb-4">
+                                        <DollarSign className="h-5 w-5 text-amber-600 mr-2" />
+                                        <h5 className="text-lg font-medium text-gray-900">Pricing Information</h5>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</p>
+                                            <div className="flex items-center mt-1">
+                                                <DollarSign className="h-4 w-4 text-amber-600 mr-2" />
+                                                <p className="text-sm text-gray-900 font-semibold">${selectedProductDetail.cost}</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</p>
+                                            <div className="flex items-center mt-1">
+                                                <DollarSign className="h-4 w-4 text-green-600 mr-2" />
+                                                <p className="text-sm text-gray-900 font-semibold">${selectedProductDetail.price}</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Profit Margin</p>
+                                            <div className="flex items-center mt-1">
+                                                <DollarSign className="h-4 w-4 text-blue-600 mr-2" />
+                                                <p className="text-sm text-gray-900 font-semibold">
+                                                    ${(parseFloat(selectedProductDetail.price) - parseFloat(selectedProductDetail.cost)).toFixed(2)}
+                                                    <span className="text-xs text-gray-500 ml-1">
+                                                        ({(((parseFloat(selectedProductDetail.price) - parseFloat(selectedProductDetail.cost)) / parseFloat(selectedProductDetail.price)) * 100).toFixed(1)}%)
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Inventory Information */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                    <div className="flex items-center mb-4">
+                                        <Box className="h-5 w-5 text-amber-600 mr-2" />
+                                        <h5 className="text-lg font-medium text-gray-900">Inventory Information</h5>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current Stock</p>
+                                            <div className="flex items-center mt-1">
+                                                <Box className="h-4 w-4 text-blue-600 mr-2" />
+                                                <p className="text-sm text-gray-900 font-semibold">{selectedProductDetail.quantity} units</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Status</p>
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border mt-1 ${getStockStatusColor(selectedProductDetail.quantity)}`}>
+                                                <Box className="h-3 w-3 mr-1" />
+                                                {getStockStatusText(selectedProductDetail.quantity)}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
+                                            <div className="flex items-center mt-1">
+                                                <DollarSign className="h-4 w-4 text-green-600 mr-2" />
+                                                <p className="text-sm text-gray-900 font-semibold">
+                                                    ${(parseFloat(selectedProductDetail.price) * parseFloat(selectedProductDetail.quantity)).toFixed(2)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Product Timeline */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                    <div className="flex items-center mb-4">
+                                        <Calendar className="h-5 w-5 text-amber-600 mr-2" />
+                                        <h5 className="text-lg font-medium text-gray-900">Product Timeline</h5>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                            <div>
+                                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Created</p>
+                                                <p className="text-sm text-gray-900">
+                                                    {new Date(selectedProductDetail.created_at || Date.now()).toLocaleDateString('en-US', {
+                                                        weekday: 'long',
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric'
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                            <div>
+                                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</p>
+                                                <p className="text-sm text-gray-900">
+                                                    {selectedProductDetail.updated_at
+                                                        ? new Date(selectedProductDetail.updated_at).toLocaleDateString('en-US', {
+                                                            weekday: 'long',
+                                                            year: 'numeric',
+                                                            month: 'long',
+                                                            day: 'numeric'
+                                                        })
+                                                        : 'Never updated'
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <div className={`w-2 h-2 rounded-full mr-3 ${selectedProductDetail.is_active ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                            <div>
+                                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current Status</p>
+                                                <p className="text-sm text-gray-900">{selectedProductDetail.is_active ? 'Active' : 'Inactive'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Product Image Section */}
+                            {selectedProductDetail.image && (
+                                <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
+                                    <div className="flex items-center mb-4">
+                                        <ImageIcon className="h-5 w-5 text-amber-600 mr-2" />
+                                        <h5 className="text-lg font-medium text-gray-900">Product Image</h5>
+                                    </div>
+                                    <div className="flex justify-center">
+                                        <img
+                                            src={selectedProductDetail.image}
+                                            alt={selectedProductDetail.name}
+                                            className="max-w-sm max-h-64 object-contain rounded-lg border border-gray-300"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 rounded-b-lg">
+                            <div className="flex justify-between items-center">
+                                <div className="text-xs text-gray-500">
+                                    Product Code: {selectedProductDetail.product_code} • Last viewed: {new Date().toLocaleString()}
+                                </div>
+                                <div className="flex space-x-3">
+                                    <button
+                                        onClick={() => handleEditProduct(selectedProductDetail)}
+                                        className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-md hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors"
+                                    >
+                                        <Edit className="h-4 w-4 mr-2 inline" />
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={closeDetailModal}
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                    <button className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors">
+                                        Export Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Add Product Modal */}
             {showAddProductModal && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">

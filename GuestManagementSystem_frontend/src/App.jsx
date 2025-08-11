@@ -12,6 +12,7 @@ import AvailableRooms from './components/Room/AvailableRooms';
 import ProductManagement from './components/product/ProductManagement';
 import CategoryManagement from './components/product/CategoryManagement';
 import HotelLanding from './components/Hotel/HotelLanding';
+import ProductReport from './components/product/productReport';
 
 import './App.css'
 
@@ -30,6 +31,7 @@ function App() {
           <Route path="available-rooms" element={<AvailableRooms />}></Route>
           <Route path="products" element={<ProductManagement />}></Route>
           <Route path="categories" element={<CategoryManagement />}></Route>
+          <Route path="productreports" element={<ProductReport />}></Route>
         </Route>
       </Routes>
 

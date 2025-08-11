@@ -207,7 +207,16 @@ const EssenciaHotelDashboard = ({
                     view: 'products-manage',
                     description: 'Manage Products',
                     roles: ['staff'],
+                },
+                {
+                    name: 'Product Report',
+                    icon: <Settings className="w-4 h-4" />,
+                    path: '/dashboard/productreports',
+                    view: 'products-manage',
+                    description: 'Products Reports',
+                    roles: ['staff'],
                 }
+
             ]
         },
         {
