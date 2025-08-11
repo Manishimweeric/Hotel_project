@@ -171,6 +171,7 @@ const HotelLandingPage = () => {
                             <a href="#services" className="text-gray-700 hover:text-amber-600 transition-colors">Services</a>
                             <a href="#about" className="text-gray-700 hover:text-amber-600 transition-colors">About</a>
                             <a href="#contact" className="text-gray-700 hover:text-amber-600 transition-colors">Contact</a>
+                            <a href="/login" className="text-gray-700 hover:text-amber-600 transition-colors">Login</a>
 
                             {/* Cart Button */}
                             <button
