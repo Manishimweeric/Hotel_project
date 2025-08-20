@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.utils.translation import gettext_lazy as _
+
+from django.shortcuts import get_object_or_404
 from .models import (
     User, Customer, ProductCategory, Product, Room, Cart, CartItem,
     Order, OrderItem, ChatBot, ChatMessage, Feedback, AIInsight
@@ -360,17 +362,26 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class CreateOrderSerializer(serializers.Serializer):
-    """Serializer for creating orders from cart"""
+    user_id = serializers.IntegerField(write_only=True)
     notes = serializers.CharField(required=False, allow_blank=True)
-    
+
     def validate(self, attrs):
-        request = self.context['request']
+        user_id = attrs.get('user_id')
+
+        # ✅ Customer IS the user model → look up by id/pk
+        customer = get_object_or_404(Customer, id=user_id)
+
+        # Ensure the customer has a cart with items
         try:
-            cart = request.user.cart
-            if not cart.cart_items.exists():
-                raise serializers.ValidationError("Cart is empty.")
+            cart = Cart.objects.get(customer=customer)  # or customer_id=user_id
         except Cart.DoesNotExist:
-            raise serializers.ValidationError("Cart not found.")
+            raise serializers.ValidationError({'cart': 'Cart does not exist.'})
+
+        if not cart.cart_items.exists():
+            raise serializers.ValidationError({'cart': 'Cart is empty.'})
+
+        attrs['customer'] = customer
+        attrs['cart'] = cart
         return attrs
 
 

@@ -229,37 +229,21 @@ const EssenciaHotelDashboard = ({
             hasSubItems: true,
             subItems: [
                 {
-                    name: 'My Orders',
-                    icon: <ShoppingBag className="w-4 h-4" />,
-                    path: '/dashboard/orders/my',
-                    view: 'orders-my',
-                    description: 'My Orders',
-                    roles: ['customer'],
-                },
-                {
-                    name: 'Order History',
-                    icon: <History className="w-4 h-4" />,
-                    path: '/dashboard/orders/history',
-                    view: 'orders-history',
-                    description: 'Order History',
-                    roles: ['customer'],
-                },
-                {
                     name: 'All Orders',
                     icon: <FileText className="w-4 h-4" />,
-                    path: '/dashboard/orders/all',
+                    path: '/dashboard/orderManagement',
                     view: 'orders-all',
                     description: 'All Orders',
                     roles: ['staff'],
                 },
-                {
-                    name: 'Order Reports',
-                    icon: <PieChart className="w-4 h-4" />,
-                    path: '/dashboard/orders/reports',
-                    view: 'orders-reports',
-                    description: 'Order Analytics',
-                    roles: ['staff'],
-                }
+                // {
+                //     name: 'Order Reports',
+                //     icon: <PieChart className="w-4 h-4" />,
+                //     path: '/dashboard/orders/reports',
+                //     view: 'orders-reports',
+                //     description: 'Order Analytics',
+                //     roles: ['staff'],
+                // }
             ]
         },
 
@@ -396,8 +380,8 @@ const EssenciaHotelDashboard = ({
     }, []);
 
     const handleLogout = () => {
-        sessionStorage.removeItem('access_token');
-        sessionStorage.removeItem('user_data');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_data');
 
         setHeaderDropdownOpen(false);
         navigate('/login', { replace: true });

@@ -189,7 +189,29 @@ class ProductListCreateView(generics.ListCreateAPIView):
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    parser_classes = (MultiPartParser, FormParser)  # ✅ 
+    parser_classes = (MultiPartParser, FormParser)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        # If "replenish_quantity" is provided in request, add it instead of replacing
+        replenish_qty = request.data.get('replenish_quantity')
+        if replenish_qty is not None:
+            try:
+                replenish_qty = int(replenish_qty)
+            except ValueError:
+                return Response({"error": "replenish_quantity must be an integer"},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # Add replenishment
+            instance.quantity += replenish_qty
+            instance.save()
+
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+
+        # Otherwise, proceed with normal update (replace 
 
 
 # ============================================================================
@@ -222,45 +244,72 @@ class RoomDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ============================================================================
 # CART VIEWS
 # ============================================================================
-
 class CartView(APIView):
-    """Get current user's cart"""
+    """Get cart for a given user_id"""
+
     def get(self, request):
-        cart, created = Cart.objects.get_or_create(customer=request.user)
+        user_id = request.query_params.get("user_id")  # 👈 expect user_id in query
+        if not user_id:
+            return Response({"detail": "user_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer = get_object_or_404(Customer, id=user_id)
+        cart, _ = Cart.objects.get_or_create(customer=customer)
+
         serializer = CartSerializer(cart)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class CartItemListCreateView(APIView):
     """Add item to cart or list cart items"""
+
+    def _get_or_create_cart(self, user_id):
+        # Fetch Customer using user_id
+        customer = get_object_or_404(Customer, id=user_id)
+        cart, _ = Cart.objects.get_or_create(customer=customer)
+        return cart
+
     def get(self, request):
-        cart, created = Cart.objects.get_or_create(customer=request.user)
+        user_id = request.query_params.get("user_id")  # 👈 allow user_id in query
+        if not user_id:
+            return Response({"detail": "user_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        cart = self._get_or_create_cart(user_id)
         items = cart.cart_items.all()
         serializer = CartItemSerializer(items, many=True)
         return Response(serializer.data)
-    
+
     def post(self, request):
-        cart, created = Cart.objects.get_or_create(customer=request.user)
-        
-        # Check if item already exists in cart
-        product_id = request.data.get('product_id')
-        quantity = int(request.data.get('quantity', 1))
-        
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        cart = self._get_or_create_cart(user_id)
+
+        product_id = request.data.get("product_id")
         try:
-            cart_item = CartItem.objects.get(cart=cart, product_id=product_id)
+            quantity = int(request.data.get("quantity", 1))
+        except (TypeError, ValueError):
+            return Response({"detail": "quantity must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if quantity <= 0:
+            return Response({"detail": "quantity must be > 0"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            product = Product.objects.get(id=product_id, is_active=True)
+        except Product.DoesNotExist:
+            return Response({"detail": "Product not found or inactive."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Add or update cart item
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+        if created:
+            cart_item.quantity = quantity
+        else:
             cart_item.quantity += quantity
-            cart_item.save()
-            serializer = CartItemSerializer(cart_item)
-            return Response(serializer.data)
-        except CartItem.DoesNotExist:
-            request.data['cart'] = cart.id
-            serializer = CartItemSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(cart=cart)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        cart_item.save()
 
-
+        serializer = CartItemSerializer(cart_item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+    
+    
 class CartItemDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Update or delete cart item"""
     serializer_class = CartItemSerializer
@@ -283,62 +332,61 @@ class ClearCartView(APIView):
 # ============================================================================
 
 class OrderListCreateView(generics.ListCreateAPIView):
-    """List customer orders or create new order"""
-    serializer_class = OrderSerializer
-    
-    def get_queryset(self):
-        return Order.objects.filter(customer=self.request.user)
-    
-    def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return CreateOrderSerializer
-        return OrderSerializer
-    
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            with transaction.atomic():
-                # Get user's cart
-                cart = get_object_or_404(Cart, customer=request.user)
-                cart_items = cart.cart_items.all()
-                
-                if not cart_items.exists():
-                    return Response({'error': 'Cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Create order
-                order = Order.objects.create(
-                    customer=request.user,
-                    total_amount=cart.total_amount,
-                    notes=serializer.validated_data.get('notes', '')
-                )
-                
-                # Create order items
-                for cart_item in cart_items:
-                    OrderItem.objects.create(
-                        order=order,
-                        product=cart_item.product,
-                        quantity=cart_item.quantity,
-                        price=cart_item.product.price
-                    )
-                    
-                    # Update product quantity
-                    product = cart_item.product
-                    product.quantity -= cart_item.quantity
-                    product.save()
-                
-                # Clear cart
-                cart_items.delete()
-                
-                return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer_class = OrderSerializer  # overridden for POST below
 
+    def get_queryset(self):
+        user_id = self.request.query_params.get("user_id")
+        if not user_id:
+            return Order.objects.none()
+        return Order.objects.filter(customer_id=user_id)  # ✅
+
+    def get_serializer_class(self):
+        return CreateOrderSerializer if self.request.method == 'POST' else OrderSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)  # CreateOrderSerializer
+        serializer.is_valid(raise_exception=True)
+
+        customer = serializer.validated_data['customer']
+        cart = serializer.validated_data['cart']
+        notes = serializer.validated_data.get('notes', '')
+
+        from django.db import transaction
+        with transaction.atomic():
+            order = Order.objects.create(
+                customer=customer,
+                total_amount=cart.total_amount,
+                notes=notes,
+            )
+
+            cart_items = cart.cart_items.select_related('product')
+            # create order items + decrement stock
+            from .models import OrderItem
+            bulk = []
+            for ci in cart_items:
+                bulk.append(OrderItem(
+                    order=order,
+                    product=ci.product,
+                    quantity=ci.quantity,
+                    price=ci.product.price,
+                ))
+                ci.product.quantity = max(0, ci.product.quantity - ci.quantity)
+                ci.product.save(update_fields=['quantity'])
+            OrderItem.objects.bulk_create(bulk)
+
+            cart_items.delete()
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 class OrderDetailView(generics.RetrieveAPIView):
-    """Retrieve order details"""
     serializer_class = OrderSerializer
-    
+
     def get_queryset(self):
-        return Order.objects.filter(customer=self.request.user)
+        user_id = self.request.query_params.get("user_id")
+        if not user_id:
+            return Order.objects.none()
+        return Order.objects.filter(customer_id=user_id)  # ✅
+
 
 
 class AllOrdersView(generics.ListAPIView):

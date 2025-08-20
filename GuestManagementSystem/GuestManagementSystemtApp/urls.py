@@ -27,7 +27,7 @@ urlpatterns = [
     path('products/', views.ProductListCreateView.as_view(), name='product-list-create'),
     path('products/<int:pk>/', views.ProductDetailView.as_view(), name='product-detail'),
     path('products/search/', views.search_products, name='product-search'),
-    
+  
     # Room URLs
     path('rooms/', views.RoomListCreateView.as_view(), name='room-list-create'),
     path('rooms/<int:pk>/', views.RoomDetailView.as_view(), name='room-detail'),

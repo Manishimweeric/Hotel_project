@@ -38,7 +38,15 @@ const LoginPage = () => {
                 localStorage.setItem('user_type', response.user.user_type);
                 localStorage.setItem('user_data', JSON.stringify(response.user));
                 toast.success('Welcome to Essencia Kivu Hotel!');
-                window.location.href = '/dashboard';
+                const type = String(response.user_type || '').toLowerCase();
+                if (type === 'customer') {
+                    window.location.href = '/';
+                } else if (type === "staff" || type === 'administrator') {
+                    window.location.href = '/dashboard';
+                } else {
+
+                    toast.error("invalid roles")
+                }
             } else {
                 toast.error('Invalid email or password');
             }

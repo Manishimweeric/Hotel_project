@@ -331,6 +331,18 @@ export const productService = {
         } catch (error) {
             throw handleError(error);
         }
+    },
+
+    replenishProduct: async (productId, replenishQuantity) => {
+        try {
+            const payload = { replenish_quantity: replenishQuantity };
+            const response = await api.patch(`/products/${productId}/`, payload, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
     }
 };
 
@@ -399,11 +411,11 @@ export const roomService = {
 
 // ==================== Cart Services ====================
 export const cartService = {
-    // Get current cart
-    getCart: async () => {
+
+    getCart: async (userId) => {
         try {
-            const response = await api.get('/cart/');
-            return response.data;
+            const res = await api.get('/cart/', { params: { user_id: userId } });
+            return res.data;
         } catch (error) {
             throw handleError(error);
         }
