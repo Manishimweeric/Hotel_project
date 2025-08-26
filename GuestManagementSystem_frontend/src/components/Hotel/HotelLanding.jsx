@@ -7,12 +7,10 @@ import {
     Heart, Filter, Award, Utensils, Camera, Navigation, AlertCircle,
     LogIn, LogOut, User
 } from 'lucide-react';
-import { productService, categoryService, roomService, cartService, orderService } from '../../api';
+import { productService, categoryService, roomService, cartService, orderService, feedbackService } from '../../api';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 const HotelLandingPage = () => {
-    // State Management
-    const [activeSection, setActiveSection] = useState('rooms');
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [cart, setCart] = useState({ items: [], total_amount: 0, total_items: 0 });
@@ -29,6 +27,34 @@ const HotelLandingPage = () => {
     const [categoryChoices, setCategoryChoices] = useState([]);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
+    // Feedback Form State
+    const [feedbackData, setFeedbackData] = useState({
+        full_name: '',
+        message: ''
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitStatus, setSubmitStatus] = useState(null);
+
+    const handleFeedbackChange = (e) => {
+        const { name, value } = e.target;
+        setFeedbackData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleFeedbackSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setSubmitStatus(null);
+        try {
+            await feedbackService.createFeedback(feedbackData);
+            setSubmitStatus({ success: true, message: 'Thank you for your feedback!' });
+            setFeedbackData({ full_name: '', message: '' });
+        } catch (error) {
+            console.log(error)
+            setSubmitStatus({ success: false, message: 'Failed to submit feedback. Please try again.' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     // Authentication and Data Fetching
     useEffect(() => {
@@ -313,15 +339,23 @@ const HotelLandingPage = () => {
                         <div className="hidden md:flex items-center space-x-8">
                             <a href="#home" className="text-gray-700 hover:text-amber-600 transition-colors">Home</a>
                             <a href="#rooms" className="text-gray-700 hover:text-amber-600 transition-colors">Rooms</a>
-                            <a href="#services" className="text-gray-700 hover:text-amber-600 transition-colors">Services</a>
-                            <a href="#about" className="text-gray-700 hover:text-amber-600 transition-colors">About</a>
                             <a href="#contact" className="text-gray-700 hover:text-amber-600 transition-colors">Contact</a>
+
                             {isAuthenticated ? (
                                 <div className="flex items-center space-x-4">
                                     <div className="flex items-center space-x-2">
                                         <User className="h-5 w-5 text-gray-600" />
-                                        <span className="text-sm text-gray-700">Welcome, {user?.first_name || user?.email}</span>
+                                        <span className="text-sm text-gray-700">{user?.first_name || user?.email}</span>
                                     </div>
+                                    <a href="/customerChat" className="text-gray-700 hover:text-amber-600 transition-colors">Chart</a>
+                                    <a href="/CustomerOrders" className="text-gray-700 hover:text-amber-600 transition-colors">Orders</a>
+
+
+                                    <a href='/roomsReservation' className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
+                                        Book Now
+                                    </a>
+
+
                                     <button onClick={logout} className="flex items-center text-gray-700 hover:text-amber-600 transition-colors">
                                         <LogOut className="h-5 w-5 mr-1" /> Logout
                                     </button>
@@ -339,7 +373,7 @@ const HotelLandingPage = () => {
                                     </span>
                                 )}
                             </button>
-                            <button className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">Book Now</button>
+
                         </div>
                         <div className="md:hidden flex items-center space-x-2">
                             <button onClick={handleCartClick} className="relative p-2 text-gray-700 hover:text-amber-600 transition-colors" disabled={isLoading}>
@@ -386,12 +420,12 @@ const HotelLandingPage = () => {
             </nav>
 
             {/* Hero Section */}
-            <section id="home" className="relative h-screen overflow-hidden">
-                <div className="absolute inset-0 transition-all duration-1000 bg-cover bg-center bg-no-repeat opacity-80" style={{ backgroundImage: "url('/public/Images/hotel.jpeg')" }}></div>
+            <section id="home" className="relative h-[35vh] overflow-hidden">
+                <div className="absolute inset-0 transition-all duration-1000 bg-cover bg-center bg-no-repeat opacity-90" style={{ backgroundImage: "url('/public/Images/hotel1.jpeg')" }}></div>
                 <div className="relative z-10 h-full flex items-center justify-center text-center text-white">
                     <div className="max-w-4xl mx-auto px-4">
-                        <h1 className="text-5xl md:text-7xl font-bold mb-6 animate-fade-in">{heroSlides[currentSlide].title}</h1>
-                        <p className="text-xl md:text-2xl mb-8 opacity-90">{heroSlides[currentSlide].subtitle}</p>
+                        <h1 className="text-5xl md:text-4xl font-bold mb-6 animate-fade-in">{heroSlides[currentSlide].title}</h1>
+                        <p className="text-xl md:text-xl mb-8 opacity-90">{heroSlides[currentSlide].subtitle}</p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <button onClick={() => document.getElementById('rooms').scrollIntoView({ behavior: 'smooth' })} className="bg-amber-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-amber-700 transition-colors transform hover:scale-105">Book Your Stay</button>
                             <button onClick={() => document.getElementById('services').scrollIntoView({ behavior: 'smooth' })} className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white hover:text-gray-900 transition-colors">Explore Services</button>
@@ -400,11 +434,11 @@ const HotelLandingPage = () => {
                 </div>
                 <button onClick={prevSlide} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-amber-300 transition-colors"><ChevronLeft className="h-12 w-12" /></button>
                 <button onClick={nextSlide} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-amber-300 transition-colors"><ChevronRight className="h-12 w-12" /></button>
-                <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                {/* <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
                     {heroSlides.map((_, index) => (
                         <button key={index} onClick={() => setCurrentSlide(index)} className={`w-3 h-3 rounded-full transition-colors ${currentSlide === index ? 'bg-white' : 'bg-white bg-opacity-50'}`}></button>
                     ))}
-                </div>
+                </div> */}
             </section>
 
             {/* Rooms Section */}
@@ -593,6 +627,55 @@ const HotelLandingPage = () => {
                             <p className="text-gray-600">24/7 security and safety protocols ensuring peace of mind for all guests</p>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section className="py-16 bg-gray-50">
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center mb-12">
+                        <h2 className="text-4xl font-bold text-gray-900 mb-4">Your Feedback</h2>
+                        <p className="text-xl text-gray-600">We value your opinion! Let us know how we can improve.</p>
+                    </div>
+                    <form onSubmit={handleFeedbackSubmit} className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto">
+                        <div className="mb-6">
+                            <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                            <input
+                                type="text"
+                                id="full_name"
+                                name="full_name"
+                                value={feedbackData.full_name}
+                                onChange={handleFeedbackChange}
+                                required
+                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
+                                placeholder="Your full name"
+                            />
+                        </div>
+                        <div className="mb-6">
+                            <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                            <textarea
+                                id="message"
+                                name="message"
+                                value={feedbackData.message}
+                                onChange={handleFeedbackChange}
+                                required
+                                rows="5"
+                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
+                                placeholder="Your feedback or suggestions"
+                            ></textarea>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="w-full bg-amber-600 text-white py-3 px-6 rounded-lg hover:bg-amber-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                        </button>
+                        {submitStatus && (
+                            <div className={`mt-4 p-4 rounded-lg text-center ${submitStatus.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                                {submitStatus.message}
+                            </div>
+                        )}
+                    </form>
                 </div>
             </section>
 

@@ -42,7 +42,7 @@ const LoginPage = () => {
                 if (type === 'customer') {
                     window.location.href = '/';
                 } else if (type === "staff" || type === 'administrator') {
-                    window.location.href = '/dashboard';
+                    window.location.href = '/dashboard/Admin-dashboard';
                 } else {
 
                     toast.error("invalid roles")
@@ -66,7 +66,6 @@ const LoginPage = () => {
                 <div className="absolute -top-60 -left-60 w-96 h-96 bg-gradient-to-br from-amber-500/20 to-orange-600/20 rounded-full blur-3xl animate-pulse"></div>
                 <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-gradient-to-tr from-amber-400/15 to-yellow-500/15 rounded-full blur-3xl animate-pulse delay-1000"></div>
                 <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-gradient-to-br from-amber-300/10 to-orange-400/10 rounded-full blur-2xl animate-pulse delay-500"></div>
-
                 {/* Floating Elements */}
                 <div className="absolute top-20 left-20 w-4 h-4 bg-amber-400/30 rounded-full animate-bounce"></div>
                 <div className="absolute top-40 right-1/3 w-3 h-3 bg-yellow-300/40 rounded-full animate-bounce delay-300"></div>
@@ -223,8 +222,8 @@ const LoginPage = () => {
                                         'Sign In to Hotel Portal'
                                     )}
                                 </button>
-                                <div className="mt-8 text-center">
-                                    <div className="text-center mt-4 mb-10">
+                                <div className="mt-1 text-center">
+                                    <div className="text-center mt-4 mb-3">
                                         <p className="text-xs text-gray-600">
                                             Already have an account?{' '}
                                             <a href="/Customersignup"
@@ -232,6 +231,17 @@ const LoginPage = () => {
                                                 className="font-semibold text-amber-600 hover:text-amber-700 transition-colors"
                                             >
                                                 Customer Sign Up here
+                                            </a>
+                                        </p>
+                                    </div>
+                                    <div className="text-center mt-1 mb-5">
+                                        <p className="text-xs text-gray-600">
+                                            Back to ?{' '}
+                                            <a href="/"
+                                                type="button"
+                                                className="font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+                                            >
+                                                Home Page
                                             </a>
                                         </p>
                                     </div>

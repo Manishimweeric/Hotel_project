@@ -116,7 +116,7 @@ const EssenciaHotelDashboard = ({
         {
             name: 'Dashboard',
             icon: <Grid3X3 className="w-5 h-5" />,
-            path: '/dashboard/login',
+            path: '/dashboard/Admin-dashboard',
             view: 'overview',
             description: 'Main Dashboard',
             roles: ['staff', 'customer'],
@@ -174,6 +174,14 @@ const EssenciaHotelDashboard = ({
             view: 'categories',
             description: 'Product Categories',
             roles: ['staff'],
+        },
+        {
+            name: 'promotion',
+            icon: <MessageSquare className="w-5 h-5" />,
+            path: '/dashboard/promotionManagement',
+            view: 'chat',
+            description: 'Promotion',
+            roles: ['staff', 'customer'],
         },
         {
             name: 'Products',
@@ -248,54 +256,28 @@ const EssenciaHotelDashboard = ({
         },
 
         {
-            name: 'Chat Support',
+            name: 'Room Reservation',
             icon: <MessageSquare className="w-5 h-5" />,
-            path: '/dashboard/chat',
+            path: '/dashboard/reservationManagement',
             view: 'chat',
-            description: 'Customer Support',
+            description: 'Room Reservation',
             roles: ['staff', 'customer'],
         },
+
         {
             name: 'Feedback',
             icon: <Star className="w-5 h-5" />,
-            path: '/dashboard/feedback',
+            path: '/dashboard/feedbackManagement',
             view: 'feedback',
             description: 'Customer Feedback',
-            roles: ['staff', 'customer'],
-            hasSubItems: true,
-            subItems: [
-                {
-                    name: 'Give Feedback',
-                    icon: <Star className="w-4 h-4" />,
-                    path: '/dashboard/feedback/create',
-                    view: 'feedback-create',
-                    description: 'Share Experience',
-                    roles: ['customer'],
-                },
-                {
-                    name: 'My Feedback',
-                    icon: <FileText className="w-4 h-4" />,
-                    path: '/dashboard/feedback/my',
-                    view: 'feedback-my',
-                    description: 'My Reviews',
-                    roles: ['customer'],
-                },
-                {
-                    name: 'All Feedback',
-                    icon: <Users className="w-4 h-4" />,
-                    path: '/dashboard/feedback/all',
-                    view: 'feedback-all',
-                    description: 'Customer Reviews',
-                    roles: ['staff'],
-                }
-            ]
+            roles: ['staff'],
         },
         {
-            name: 'Reports',
+            name: 'Chat Support',
             icon: <BarChart2 className="w-5 h-5" />,
-            path: '/dashboard/reports',
+            path: '/dashboard/adminChatDashboard',
             view: 'reports',
-            description: 'Analytics & Reports',
+            description: 'Chart & Messages',
             roles: ['staff'],
         }
     ];
@@ -719,30 +701,6 @@ const EssenciaHotelDashboard = ({
                                             </div>
 
                                             <div className="px-2 py-2">
-                                                <button
-                                                    onClick={() => handleProfileAction('profile')}
-                                                    className="flex items-center w-full px-3 py-3 text-sm text-slate-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-teal-50 rounded-lg transition-all duration-200 group"
-                                                >
-                                                    <User className="w-5 h-5 mr-3 text-slate-400 group-hover:text-blue-600" />
-                                                    <div className="flex-1 text-left">
-                                                        <p className="font-medium">Profile Settings</p>
-                                                        <p className="text-xs text-slate-500">Manage your account</p>
-                                                    </div>
-                                                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleProfileAction('settings')}
-                                                    className="flex items-center w-full px-3 py-3 text-sm text-slate-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-teal-50 rounded-lg transition-all duration-200 group"
-                                                >
-                                                    <Settings className="w-5 h-5 mr-3 text-slate-400 group-hover:text-blue-600" />
-                                                    <div className="flex-1 text-left">
-                                                        <p className="font-medium">Settings</p>
-                                                        <p className="text-xs text-slate-500">Preferences & privacy</p>
-                                                    </div>
-                                                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
-                                                </button>
-
                                                 <div className="border-t border-slate-100 mt-2 pt-2">
                                                     <button
                                                         onClick={() => handleProfileAction('logout')}

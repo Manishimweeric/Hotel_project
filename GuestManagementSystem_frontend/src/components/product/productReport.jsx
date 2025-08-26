@@ -542,9 +542,6 @@ const ProductReportPage = () => {
                         </div>
                     </div>
 
-                    <h2 class="section-title">📊 Key Metrics</h2>
-                    
-
                     <h2 class="section-title">📦 Product Inventory</h2>
                     <table class="table">
                         <thead>

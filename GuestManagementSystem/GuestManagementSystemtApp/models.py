@@ -5,6 +5,7 @@ import uuid
 import os
 import random
 from django.contrib.auth.hashers import make_password, check_password
+from django.core.exceptions import ValidationError
 
 def product_image_upload_path(instance, filename):
     # Example: products/PRD20250811ABC12345/image.jpg
@@ -197,6 +198,38 @@ class Room(models.Model):
         return f"Room {self.room_code} ({self.get_categories_display()})"
 
 
+class RoomReservation(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('checked_in', 'Checked In'),
+        ('checked_out', 'Checked Out'),
+        ('canceled', 'Canceled'),
+    ]
+
+    room = models.ForeignKey('Room', on_delete=models.PROTECT, related_name='reservations')
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='room_reservations')
+    check_in = models.DateField()
+    check_out = models.DateField()
+    guests = models.PositiveIntegerField(default=1)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    notes = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Reservation #{self.id} - Room {self.room.room_code} ({self.check_in} → {self.check_out})"
+
+    @property
+    def nights(self) -> int:
+        return max((self.check_out - self.check_in).days, 0)
+
+
 class Cart(models.Model):
     """Shopping cart for customers"""
     customer = models.OneToOneField(Customer, on_delete=models.CASCADE, related_name='cart')
@@ -284,39 +317,40 @@ class OrderItem(models.Model):
 
 
 class ChatBot(models.Model):
-    """Chatbot conversations and responses"""
-    SESSION_CHOICES = [
-        ('A', 'Active'),
-        ('C', 'Closed'),
-        ('T', 'Transferred'),
-    ]
+    """Chatbot conversations and sessions"""
     
     session_id = models.CharField(max_length=100, unique=True)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='chat_sessions', null=True, blank=True)
-    guest_name = models.CharField(max_length=100, blank=True, null=True)  # For non-registered users
-    guest_email = models.EmailField(blank=True, null=True)
-    session_status = models.CharField(max_length=1, choices=SESSION_CHOICES, default='A')
+    customer = models.ForeignKey(
+        Customer, on_delete=models.CASCADE,
+        related_name='chat_sessions', null=True, blank=True
+    )
+    admin_user = models.ForeignKey(
+        'auth.User',  # or your custom AdminUser model
+        on_delete=models.SET_NULL,
+        related_name='admin_chat_sessions',
+        null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        user_name = self.customer.username if self.customer else self.guest_name
+        user_name = self.customer.username if self.customer else "Unknown"
         return f"Chat Session {self.session_id} - {user_name}"
 
 
 class ChatMessage(models.Model):
-    """Individual chat messages"""
+    """Individual chat messages between customer and admin"""
     SENDER_CHOICES = [
-        ('U', 'User'),
-        ('B', 'Bot'),
-        ('A', 'Agent'),
+        ('C', 'Customer'),
+        ('A', 'Admin'),
     ]
     
-    chat_session = models.ForeignKey(ChatBot, on_delete=models.CASCADE, related_name='messages')
+    chat_session = models.ForeignKey(
+        ChatBot, on_delete=models.CASCADE,
+        related_name='messages'
+    )
     sender = models.CharField(max_length=1, choices=SENDER_CHOICES)
     message = models.TextField()
-    intent = models.CharField(max_length=100, blank=True, null=True)  # AI-detected intent
-    confidence_score = models.FloatField(null=True, blank=True)  # AI confidence level
     timestamp = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
@@ -325,39 +359,13 @@ class ChatMessage(models.Model):
     class Meta:
         ordering = ['timestamp']
 
-
 class Feedback(models.Model):
-    """Customer feedback and reviews"""
-    RATING_CHOICES = [
-        (1, '1 Star'),
-        (2, '2 Stars'),
-        (3, '3 Stars'),
-        (4, '4 Stars'),
-        (5, '5 Stars'),
-    ]
-    
-    SENTIMENT_CHOICES = [
-        ('POS', 'Positive'),
-        ('NEU', 'Neutral'),
-        ('NEG', 'Negative'),
-    ]
-    
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='feedback')
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='feedback', null=True, blank=True)
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='feedback', null=True, blank=True)
-    rating = models.IntegerField(choices=RATING_CHOICES)
-    comment = models.TextField()
-    sentiment = models.CharField(max_length=3, choices=SENTIMENT_CHOICES, blank=True, null=True)
-    sentiment_score = models.FloatField(null=True, blank=True)  # AI sentiment analysis score
-    is_public = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
+    """Simple feedback with only name and message."""
+    full_name = models.CharField(max_length=150)
+    message = models.TextField()
+
     def __str__(self):
-        return f"{self.customer.username} - {self.rating} stars"
-    
-    class Meta:
-        ordering = ['-created_at']
+        return f"{self.full_name}: {self.message[:40]}"
 
 
 class AIInsight(models.Model):
@@ -383,3 +391,25 @@ class AIInsight(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+
+
+
+class Promotion(models.Model):
+    TYPE_CHOICES = [
+        ('product', 'Product'),
+        ('room', 'Room'),
+    ]
+
+    title = models.CharField(max_length=200)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, db_index=True)
+    number_orders = models.PositiveIntegerField(help_text="Number of items/nights this promotion applies to")
+    promotion = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} [{self.get_type_display()}]"
+
+    class Meta:
+        ordering = ['-created_at'] 

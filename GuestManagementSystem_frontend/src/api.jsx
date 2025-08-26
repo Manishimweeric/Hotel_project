@@ -408,6 +408,89 @@ export const roomService = {
         }
     }
 };
+// ==================== Reservation Services ====================
+export const reservationService = {
+    // List reservations (filter by user_id)
+    getReservations: async () => {
+        try {
+            const response = await api.get(`/reservations/all_Reservation/`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+    updateStatus: async (reservationId, status) => {
+        try {
+            const response = await api.patch(`/reservations/${reservationId}/status/`, { status });
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Create reservation
+    create: async (reservationData) => {
+        try {
+            const response = await api.post('/reservations/', reservationData);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+
+    // Get single reservation (scoped by user_id as query param)
+    get: async (reservationId, userId) => {
+        try {
+            const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+            const response = await api.get(`/reservations/${reservationId}/${qs}`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Update reservation (e.g., notes/status) — optional
+    update: async (reservationId, data, userId) => {
+        try {
+            const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+            const response = await api.patch(`/reservations/${reservationId}/${qs}`, data);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    getReservation: async (reservationId) => {
+        try {
+            const response = await api.get(`/reservations/${reservationId}/`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Update reservation status
+    updateReservationStatus: async (reservationId, data) => {
+        try {
+            const response = await api.patch(`/reservations/${reservationId}/`, data);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Cancel reservation (soft delete)
+    cancel: async (reservationId, userId) => {
+        try {
+            const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+            const response = await api.delete(`/reservations/${reservationId}/${qs}`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    }
+};
 
 // ==================== Cart Services ====================
 export const cartService = {
@@ -525,37 +608,131 @@ export const orderService = {
     }
 };
 
+
+
+export const promotionService = {
+    // Get promotions
+    getPromotions: async () => {
+        try {
+            const response = await api.get('/promotions/');
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Create new promotion (Admin only)
+    createPromotion: async (promotionData) => {
+        try {
+            const response = await api.post('/promotions/', promotionData);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Get promotion by ID
+    getPromotion: async (promotionId) => {
+        try {
+            const response = await api.get(`/promotions/${promotionId}/`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Update promotion (Admin only)
+    updatePromotion: async (promotionId, data) => {
+        try {
+            const response = await api.patch(`/promotions/${promotionId}/`, data);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    getAllPromotions: async (params = {}) => {
+        try {
+            const response = await api.get('/promotions/', { params });
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+};
+
 // ==================== Chat Services ====================
+
 export const chatService = {
-    // Start chat session
-    startChatSession: async (sessionData = {}) => {
+    // Get all chat sessions
+    getSessions: async () => {
         try {
-            const response = await api.post('/chat/session/', sessionData);
+            const response = await api.get('/chat/sessions/');
             return response.data;
         } catch (error) {
             throw handleError(error);
         }
     },
 
-    // Send message
-    sendMessage: async (messageData) => {
+    // Create a new chat session
+    createSession: async (sessionData) => {
         try {
-            const response = await api.post('/chat/message/', messageData);
+            const response = await api.post('/chat/sessions/', sessionData);
             return response.data;
         } catch (error) {
             throw handleError(error);
         }
     },
 
-    // Get chat history
-    getChatHistory: async (sessionId) => {
+    // Get a specific chat session by ID
+    getSession: async (sessionId) => {
         try {
-            const response = await api.get(`/chat/history/${sessionId}/`);
+            const response = await api.get(`/chat/sessions/${sessionId}/`);
             return response.data;
         } catch (error) {
             throw handleError(error);
         }
-    }
+    },
+
+    // Delete a session
+    deleteSession: async (sessionId) => {
+        try {
+            const response = await api.delete(`/chat/sessions/${sessionId}/`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Get all messages (optionally filtered by session)
+    getMessages: async (params = {}) => {
+        try {
+            const response = await api.get('/chat/messages/', { params });
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Get messages of a specific session
+    getSessionMessages: async (sessionId) => {
+        try {
+            const response = await api.get(`/chat/sessions/${sessionId}/messages/`);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
+
+    // Send a message in a session
+    sendMessage: async (sessionId, messageData) => {
+        try {
+            const response = await api.post(`/chat/sessions/${sessionId}/send/`, messageData);
+            return response.data;
+        } catch (error) {
+            throw handleError(error);
+        }
+    },
 };
 
 // ==================== Feedback Services ====================
@@ -589,6 +766,7 @@ export const feedbackService = {
             throw handleError(error);
         }
     },
+
 
     // Update feedback
     updateFeedback: async (feedbackId, feedbackData) => {

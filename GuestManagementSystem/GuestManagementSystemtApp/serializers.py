@@ -2,11 +2,15 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+from datetime import date
+
+from .models import Room, RoomReservation
 
 from django.shortcuts import get_object_or_404
 from .models import (
     User, Customer, ProductCategory, Product, Room, Cart, CartItem,
-    Order, OrderItem, ChatBot, ChatMessage, Feedback, AIInsight
+    Order, OrderItem, ChatBot, ChatMessage, Feedback, AIInsight,Promotion
 )
 # ============================================================================
 # AUTHENTICATION SERIALIZERS
@@ -360,6 +364,28 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'order_number', 'customer', 'created_at', 'updated_at']
 
+class OrderDetailSerializer(serializers.ModelSerializer):
+    order_items = OrderItemSerializer(many=True, read_only=True)
+    items_count = serializers.SerializerMethodField()
+    items_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        # include whatever fields your Order has (example below)
+        fields = [
+            'id', 'order_number', 'status', 'customer', 'created_at', 'updated_at',
+            'items_count', 'items_total', 'order_items'
+        ]
+
+    def get_items_count(self, obj):
+        return obj.order_items.count()
+
+    def get_items_total(self, obj):
+        # Sum of item subtotals
+        total = sum((oi.subtotal for oi in obj.order_items.all()), start=0)
+        # Ensure Decimal result even if no items
+        from decimal import Decimal
+        return Decimal(total)
 
 class CreateOrderSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(write_only=True)
@@ -401,62 +427,51 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         ]
 
 
+class ChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'chat_session', 'sender', 'message', 'timestamp']
+        read_only_fields = ['id', 'timestamp']
+
+
 class ChatBotSerializer(serializers.ModelSerializer):
-    """Serializer for chatbot sessions"""
-    messages = ChatMessageSerializer(many=True, read_only=True)
-    customer = CustomerSerializer(read_only=True)
-    session_status_display = serializers.CharField(source='get_session_status_display', read_only=True)
-    
+    last_message = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = ChatBot
         fields = [
-            'id', 'session_id', 'customer', 'guest_name', 'guest_email',
-            'session_status', 'session_status_display', 'messages',
-            'created_at', 'updated_at'
+            'id', 'session_id', 'customer', 'admin_user',
+            'created_at', 'updated_at', 'last_message'
         ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'last_message']
 
+    def get_last_message(self, obj):
+        msg = obj.messages.order_by('-timestamp').first()
+        if not msg:
+            return None
+        return ChatMessageSerializer(msg).data
 
-class SendMessageSerializer(serializers.Serializer):
-    """Serializer for sending messages to chatbot"""
-    message = serializers.CharField(max_length=1000)
-    session_id = serializers.CharField(required=False)
-    guest_name = serializers.CharField(required=False, max_length=100)
-    guest_email = serializers.EmailField(required=False)
+class ChatBotDetailSerializer(ChatBotSerializer):
+    messages = ChatMessageSerializer(many=True, read_only=True)
+    guest_first_name = serializers.CharField(source='customer.first_name', read_only=True)
+    guest_last_name = serializers.CharField(source='customer.last_name', read_only=True)
 
+    class Meta(ChatBotSerializer.Meta):
+        fields = ChatBotSerializer.Meta.fields + [
+            'messages',
+            'guest_first_name',
+            'guest_last_name',
+        ]
 
 # ============================================================================
 # FEEDBACK SERIALIZERS
 # ============================================================================
 
 class FeedbackSerializer(serializers.ModelSerializer):
-    """Serializer for customer feedback"""
-    customer = CustomerSerializer(read_only=True)
-    order = OrderSerializer(read_only=True)
-    room = RoomSerializer(read_only=True)
-    rating_display = serializers.CharField(source='get_rating_display', read_only=True)
-    sentiment_display = serializers.CharField(source='get_sentiment_display', read_only=True)
-    
     class Meta:
         model = Feedback
-        fields = [
-            'id', 'customer', 'order', 'room', 'rating', 'rating_display',
-            'comment', 'sentiment', 'sentiment_display', 'sentiment_score',
-            'is_public', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['customer', 'sentiment', 'sentiment_score']
-
-
-class CreateFeedbackSerializer(serializers.ModelSerializer):
-    """Serializer for creating feedback"""
-    class Meta:
-        model = Feedback
-        fields = ['order', 'room', 'rating', 'comment', 'is_public']
-    
-    def validate(self, attrs):
-        if not attrs.get('order') and not attrs.get('room'):
-            raise serializers.ValidationError("Feedback must be associated with either an order or room.")
-        return attrs
-
+        fields = ['id', 'full_name', 'message']  # id is read-only PK
+        read_only_fields = ['id']
 
 # ============================================================================
 # AI INSIGHTS SERIALIZERS
@@ -473,3 +488,132 @@ class AIInsightSerializer(serializers.ModelSerializer):
             'confidence_score', 'data_points', 'action_required', 'is_active',
             'created_at'
         ]
+
+
+class ReservationStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoomReservation
+        fields = ["status"]  # status-only
+
+    def validate_status(self, value):
+        allowed_statuses = dict(RoomReservation.STATUS_CHOICES).keys()
+        if value not in allowed_statuses:
+            raise serializers.ValidationError("Invalid status value.")
+        current = self.instance.status if self.instance else None
+        allowed_transitions = {
+            "pending": {"confirmed", "canceled"},
+            "confirmed": {"checked_in", "canceled"},
+            "checked_in": {"checked_out"},
+            "checked_out": set(),
+            "canceled": set(),
+        }
+        if current and value != current:
+            if value not in allowed_transitions.get(current, set()):
+                raise serializers.ValidationError(f"Illegal transition {current} → {value}.")
+        return value
+
+
+class RoomReservationSerializer(serializers.ModelSerializer):
+    room_code = serializers.CharField(source='room.room_code', read_only=True)
+    guest_first_name = serializers.CharField(source='customer.first_name', read_only=True)
+    guest_last_name = serializers.CharField(source='customer.last_name', read_only=True)
+
+    category_display = serializers.CharField(source='room.get_categories_display', read_only=True)
+    nights = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = RoomReservation
+        fields = [
+            'id', 'room', 'room_code', 'category_display',
+            'customer', 'check_in', 'check_out', 'guests',
+            'total_amount', 'notes', 'status', 'nights',
+            'created_at', 'updated_at','guest_first_name','guest_last_name'
+        ]
+        read_only_fields = ['total_amount', 'status', 'created_at', 'updated_at']
+
+class CreateRoomReservationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoomReservation
+        fields = ['room', 'customer', 'check_in', 'check_out', 'guests', 'notes']
+
+    def validate(self, attrs):
+        room: Room = attrs['room']
+        check_in: date = attrs['check_in']
+        check_out: date = attrs['check_out']
+        guests: int = attrs.get('guests', 1)
+
+        if check_in >= check_out:
+            raise serializers.ValidationError("check_out must be after check_in.")
+
+        if guests > room.capacity:
+            raise serializers.ValidationError(f"Guests exceed room capacity ({room.capacity}).")
+
+        # Prevent overlapping reservations (ignore canceled/checked_out)
+        overlap = RoomReservation.objects.filter(
+            room=room,
+            status__in=['pending', 'confirmed', 'checked_in'],
+            check_in__lt=check_out,
+            check_out__gt=check_in,
+        ).exists()
+
+        if overlap:
+            raise serializers.ValidationError("This room is already reserved in the selected date range.")
+
+        return attrs
+
+    def create(self, validated_data):
+        room: Room = validated_data['room']
+        check_in: date = validated_data['check_in']
+        check_out: date = validated_data['check_out']
+
+        nights = (check_out - check_in).days
+        total = room.price_per_night * nights
+
+        reservation = RoomReservation.objects.create(
+            **validated_data,
+            total_amount=total,
+            status='confirmed',
+        )
+        return reservation
+    
+class UpdateRoomReservationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoomReservation
+        fields = ['status', 'notes']
+
+    def update(self, instance, validated_data):
+        # Update reservation
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update room reserved status based on new status and dates
+        today = timezone.localdate()
+        room = instance.room
+        
+        if instance.status in ['checked_in']:
+            # Mark room as reserved when checked in
+            if not room.reserved:
+                room.reserved = True
+                room.save(update_fields=['reserved'])
+        elif instance.status in ['checked_out', 'canceled']:
+            # Check if room should be unreserved
+            has_active_reservations = RoomReservation.objects.filter(
+                room=room,
+                status__in=['pending', 'confirmed', 'checked_in'],
+                check_in__lte=today,
+                check_out__gt=today
+            ).exclude(id=instance.id).exists()
+            
+            if not has_active_reservations and room.reserved:
+                room.reserved = False
+                room.save(update_fields=['reserved'])
+
+        return instance
+    
+
+
+class PromotionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Promotion
+        fields = ['id', 'title', 'type', 'number_orders', 'promotion', 'created_at', 'updated_at']

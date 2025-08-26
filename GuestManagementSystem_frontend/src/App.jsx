@@ -14,7 +14,14 @@ import CategoryManagement from './components/product/CategoryManagement';
 import HotelLanding from './components/Hotel/HotelLanding';
 import ProductReport from './components/product/productReport';
 import OrderManagement from './components/Order/OrderManagement'
-
+import RoomsReservation from './components/Room/RoomsReservation';
+import ReservationManagement from './components/Room/ReservationManagement';
+import Dashboard from './components/Dashboard';
+import PromotionManagement from './components/Promotion/PromotionManagement';
+import FeedbackManagement from './components/Feedback/FeedbackManagement';
+import CustomerChat from './components/customer/CustomerChat';
+import AdminChatDashboard from './components/Chart/AdminChatDashboard';
+import CustomerOrders from './components/Order/CustomerOrders';
 import './App.css'
 
 function App() {
@@ -25,7 +32,13 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard/*" element={<Layout />}></Route>
         <Route path="/Customersignup" element={<CustomerSignupPage />} />
+        <Route path="/roomsReservation" element={<RoomsReservation />} />
+        <Route path="/customerChat" element={<CustomerChat />} />
+        <Route path="/CustomerOrders" element={<CustomerOrders />} />
+
+
         <Route path="/dashboard" element={<Layout />}>
+          <Route path="Admin-dashboard" element={<Dashboard />}></Route>
           <Route path="customers" element={<ViewCustomer />}></Route>
           <Route path="users" element={<UsersManagement />}></Route>
           <Route path="rooms" element={<Rooms />}></Route>
@@ -34,6 +47,11 @@ function App() {
           <Route path="categories" element={<CategoryManagement />}></Route>
           <Route path="productreports" element={<ProductReport />}></Route>
           <Route path="orderManagement" element={<OrderManagement />}></Route>
+          <Route path="reservationManagement" element={<ReservationManagement />}></Route>
+          <Route path="promotionManagement" element={<PromotionManagement />}></Route>
+          <Route path="feedbackManagement" element={<FeedbackManagement />}></Route>
+          <Route path="adminChatDashboard" element={<AdminChatDashboard />}></Route>
+
         </Route>
       </Routes>
 

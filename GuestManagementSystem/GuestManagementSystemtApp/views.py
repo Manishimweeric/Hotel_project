@@ -11,10 +11,14 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.http import Http404
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.response import Response
+from rest_framework import status as http_status
+from django.core.mail import send_mail
 
 from .models import (
     User, Customer, ProductCategory, Product, Room, Cart, CartItem,
-    Order, OrderItem, ChatBot, ChatMessage, Feedback, AIInsight, UserToken
+    Order, OrderItem, ChatBot, ChatMessage, Feedback, AIInsight, UserToken,RoomReservation,Promotion
 )
 from .serializers import (
     CustomerLoginSerializer, UserLoginSerializer, UserSerializer, UserUpdateSerializer,
@@ -22,8 +26,9 @@ from .serializers import (
     CustomerSerializer, ProductCategorySerializer, ProductSerializer,
     RoomSerializer, CartSerializer, CartItemSerializer, OrderSerializer,
     CreateOrderSerializer, OrderItemSerializer, ChatBotSerializer,
-    ChatMessageSerializer, SendMessageSerializer, FeedbackSerializer,
-    CreateFeedbackSerializer, AIInsightSerializer
+    ChatMessageSerializer, FeedbackSerializer,ChatBotDetailSerializer,
+    AIInsightSerializer,RoomReservationSerializer,
+    CreateRoomReservationSerializer,UpdateRoomReservationSerializer,PromotionSerializer,ReservationStatusUpdateSerializer
 )
 
 
@@ -241,6 +246,158 @@ class RoomDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = RoomSerializer
 
 
+class ReservationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete a specific reservation.
+    """
+    serializer_class = RoomReservationSerializer
+    lookup_field = 'id'
+
+    def get_queryset(self):
+        return RoomReservation.objects.select_related('room', 'customer')
+
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return UpdateRoomReservationSerializer
+        return RoomReservationSerializer
+
+
+
+class AllReservationView(APIView):
+    def get(self, request):
+        reservations = RoomReservation.objects.select_related('room').order_by('-created_at')
+        serializer = RoomReservationSerializer(reservations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ReservationListCreateView(generics.ListCreateAPIView):
+    """
+    List current user's reservations (filter by ?user_id=) or create a reservation.
+    Mirrors OrderListCreateView style.
+    """
+    serializer_class = RoomReservationSerializer  # overridden on POST
+
+
+    def all_Reservation(self):
+        return RoomReservation.objects.select_related('room').order_by('-created_at')
+
+    def get_queryset(self):
+        user_id = self.request.query_params.get("user_id")
+        if not user_id:
+            return RoomReservation.objects.none()
+        return RoomReservation.objects.filter(customer_id=user_id).select_related('room')
+    
+
+
+    def get_serializer_class(self):
+        return CreateRoomReservationSerializer if self.request.method == 'POST' else RoomReservationSerializer
+    
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        reservation: RoomReservation = self.get_object()
+        partial = kwargs.pop('partial', True)
+
+        # Use status-only serializer
+        serializer = ReservationStatusUpdateSerializer(
+            reservation, data=request.data, partial=partial
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Side effects on room.reserved flag based on new state
+        room = reservation.room
+        if not room.reserved:
+                room.reserved = True
+                room.save(update_fields=['reserved'])
+
+        # Return full reservation payload
+        return Response(RoomReservationSerializer(reservation).data, status=status.HTTP_200_OK)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reservation = serializer.save()
+        today = timezone.localdate()
+        room = reservation.room
+        if not room.reserved:
+            room.reserved = True
+            room.save(update_fields=['reserved'])
+        
+        is_currently_occupied = reservation.check_in <= today < reservation.check_out
+        if is_currently_occupied and not room.reserved:
+            room.reserved = True
+            room.save(update_fields=['reserved'])
+
+        out = RoomReservationSerializer(reservation)
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+
+class ReservationStatusUpdateView(generics.UpdateAPIView):
+    """
+    PATCH /reservations/<pk>/status/
+    Body: { "status": "<pending|confirmed|checked_in|checked_out|canceled>" }
+    """
+    queryset = RoomReservation.objects.select_related("room")
+    serializer_class = ReservationStatusUpdateSerializer
+    http_method_names = ["patch"]  # status-only endpoint
+
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        reservation = self.get_object()
+        serializer = self.get_serializer(reservation, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Optional side-effect: keep room.reserved flag in sync
+        room = reservation.room
+        if reservation.status in ("confirmed", "checked_in") and not room.reserved:
+            room.reserved = True
+            room.save(update_fields=["reserved"])
+        elif reservation.status in ("checked_out", "canceled") and room.reserved:
+            # Free the room only if there is no other active reservation
+            has_active = room.reservations.filter(
+                status__in=["pending", "confirmed", "checked_in"]
+            ).exclude(pk=reservation.pk).exists()
+            if not has_active:
+                room.reserved = False
+                room.save(update_fields=["reserved"])
+
+        # Return the full reservation payload
+        return Response(RoomReservationSerializer(reservation).data, status=status.HTTP_200_OK)
+
+class ReservationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve/Update/Cancel a reservation (DELETE = soft-cancel).
+    - Update is limited to notes/status by default unless you broaden serializer.
+    - Deleting marks status='canceled' instead of hard delete, and may free the room.reserved flag.
+    """
+    serializer_class = RoomReservationSerializer
+
+    def get_queryset(self):
+        user_id = self.request.query_params.get("user_id")
+        if not user_id:
+            return RoomReservation.objects.none()
+        return RoomReservation.objects.filter(customer_id=user_id).select_related('room')
+
+    def perform_destroy(self, instance: RoomReservation):
+        # Soft cancel
+        instance.status = 'canceled'
+        instance.save(update_fields=['status', 'updated_at'])
+
+        # If no other active reservations overlap today, free the room.reserved flag
+        room = instance.room
+        today = timezone.localdate()
+        still_occupied = RoomReservation.objects.filter(
+            room=room,
+            status__in=['pending', 'confirmed', 'checked_in'],
+            check_in__lte=today,
+            check_out__gt=today,
+        ).exists()
+
+        if room.reserved and not still_occupied:
+            room.reserved = False
+            room.save(update_fields=['reserved'])
+
 # ============================================================================
 # CART VIEWS
 # ============================================================================
@@ -344,7 +501,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return CreateOrderSerializer if self.request.method == 'POST' else OrderSerializer
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)  # CreateOrderSerializer
+        serializer = self.get_serializer(data=request.data) 
         serializer.is_valid(raise_exception=True)
 
         customer = serializer.validated_data['customer']
@@ -389,148 +546,213 @@ class OrderDetailView(generics.RetrieveAPIView):
 
 
 
+# views.py
+from rest_framework import generics, permissions
+from django.db.models import Prefetch
+from .models import Order, OrderItem
+from .serializers import OrderDetailSerializer, OrderSerializer  
+
+class OrderDetailView(generics.RetrieveAPIView):
+    """
+    Get a single order (with items).
+    - If ?user_id is provided, scope to that customer (good for customer-side).
+    - If no ?user_id and the requester is staff, allow access (admin-side).
+    """
+    serializer_class = OrderDetailSerializer
+
+    def get_queryset(self):
+        base_qs = (
+            Order.objects
+            .select_related('customer')
+            .prefetch_related(
+                Prefetch('order_items', queryset=OrderItem.objects.select_related('product').order_by('created_at'))
+            )
+            .order_by('-created_at')
+        )
+
+        user_id = self.request.query_params.get("user_id")
+        if user_id:
+            return base_qs.filter(customer_id=user_id)
+
+        # If no user_id, only allow staff/admin to reach any order
+        if self.request.user and self.request.user.is_staff:
+            return base_qs
+
+        # Non-staff without user_id can't see anything
+        return Order.objects.none()
+
+
 class AllOrdersView(generics.ListAPIView):
     """List all orders (Admin only)"""
-    queryset = Order.objects.all()
     serializer_class = OrderSerializer
+    queryset = (
+        Order.objects
+        .prefetch_related('order_items')
+        .order_by('-created_at')  # default order by newest
+    )
+
+    # Optional: enable ?ordering=created_at or -created_at (and others)
+    from rest_framework.filters import OrderingFilter, SearchFilter
+    filter_backends = [OrderingFilter, SearchFilter]
+    ordering_fields = ['created_at', 'status']  # add fields you need
+    search_fields = ['order_number', 'customer__username', 'customer__first_name', 'customer__last_name']
+
+
+
+
+from django.conf import settings
+from django.core.mail import send_mail
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status as http_status
+
+from .models import Order
+from .serializers import OrderSerializer
 
 
 class UpdateOrderStatusView(APIView):
-    """Update order status (Admin only)"""
+    """Update order status (Admin only) and notify customer via email"""
+
     def patch(self, request, pk):
         order = get_object_or_404(Order, pk=pk)
         status_value = request.data.get('status')
-        
+
+        # Validate status
         if status_value not in dict(Order.STATUS_CHOICES):
-            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({'error': 'Invalid status'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+        # Update status
         order.status = status_value
         order.save()
-        
+
+        # Prepare email recipient (supports order.customer or order.user)
+        customer = getattr(order, 'customer', None) or getattr(order, 'user', None)
+        customer_email = getattr(customer, 'email', None)
+        customer_first_name = (getattr(customer, 'first_name', None) or '').strip() or 'Customer'
+
+        # Use human-friendly status label if available
+        try:
+            status_label = order.get_status_display()
+        except Exception:
+            status_label = status_value.upper()
+
+        email_sent = False
+        email_error = None
+
+        if customer_email:
+            try:
+                send_mail(
+                    subject='Your Order Status Updated',
+                    message=(
+                        f"Dear {customer_first_name},\n\n"
+                        f"Your order #{order.id} status has been updated to: {status_label}.\n\n"
+                        "Thank you for choosing Guest Management System . We appreciate your trust and look forward to serving you.\n\n"
+                        "Best regards,\n"
+                        "The Guest Management System Team"
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[customer_email],
+                    fail_silently=False,
+                )
+                email_sent = True
+            except Exception as e:
+                # Order status is already updated; surface email failure but keep 200
+                email_error = str(e)
+
         serializer = OrderSerializer(order)
-        return Response(serializer.data)
+        payload = {
+            'order': serializer.data,
+            'message': f'Order status updated to {status_label}',
+            'email_sent': email_sent
+        }
+        if email_error:
+            payload['email_error'] = f'Failed to send email: {email_error}'
+
+        return Response(payload, status=http_status.HTTP_200_OK)
 
 
 # ============================================================================
 # CHAT VIEWS
 # ============================================================================
 
-class ChatSessionView(APIView):
-    """Start or get chat session"""
-    permission_classes = [permissions.AllowAny]
-    
-    def post(self, request):
-        import uuid
-        session_id = str(uuid.uuid4())
-        
-        chat_session = ChatBot.objects.create(
-            session_id=session_id,
-            customer=request.user if request.user.is_authenticated else None,
-            guest_name=request.data.get('guest_name'),
-            guest_email=request.data.get('guest_email')
-        )
-        
-        serializer = ChatBotSerializer(chat_session)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-class SendMessageView(APIView):
-    """Send message to chatbot"""
-    permission_classes = [permissions.AllowAny]
-    
-    def post(self, request):
-        serializer = SendMessageSerializer(data=request.data)
-        if serializer.is_valid():
-            session_id = serializer.validated_data['session_id']
-            message_text = serializer.validated_data['message']
-            
-            try:
-                chat_session = ChatBot.objects.get(session_id=session_id)
-                
-                # Create user message
-                user_message = ChatMessage.objects.create(
-                    chat_session=chat_session,
-                    sender='U',
-                    message=message_text
-                )
-                
-                # Simple bot response (you can integrate with actual AI here)
-                bot_response = self.generate_bot_response(message_text)
-                
-                bot_message = ChatMessage.objects.create(
-                    chat_session=chat_session,
-                    sender='B',
-                    message=bot_response,
-                    intent='general',
-                    confidence_score=0.8
-                )
-                
-                return Response({
-                    'user_message': ChatMessageSerializer(user_message).data,
-                    'bot_response': ChatMessageSerializer(bot_message).data
-                })
-                
-            except ChatBot.DoesNotExist:
-                return Response({'error': 'Chat session not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def generate_bot_response(self, message):
-        """Generate simple bot response - integrate with AI service"""
-        message_lower = message.lower()
-        
-        if 'hello' in message_lower or 'hi' in message_lower:
-            return "Hello! Welcome to our hotel. How can I assist you today?"
-        elif 'room' in message_lower:
-            return "I can help you with room bookings. What type of room are you looking for?"
-        elif 'price' in message_lower or 'cost' in message_lower:
-            return "Our room prices vary by category. Would you like me to show you our current rates?"
-        elif 'book' in message_lower:
-            return "I'd be happy to help you with a booking. Let me connect you with our booking system."
-        else:
-            return "Thank you for your message. Let me help you with that. Could you please provide more details?"
-
-
-class ChatHistoryView(generics.RetrieveAPIView):
-    """Get chat session history"""
-    queryset = ChatBot.objects.all()
+class ChatSessionListCreateView(generics.ListCreateAPIView):
+    """List all chat sessions or create a new one"""
+    queryset = ChatBot.objects.all().order_by('-updated_at')
     serializer_class = ChatBotSerializer
-    lookup_field = 'session_id'
 
 
+class ChatSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a chat session"""
+    queryset = ChatBot.objects.all()
+    serializer_class = ChatBotDetailSerializer
+
+
+class ChatMessageListCreateView(generics.ListCreateAPIView):
+    """List or create messages (filter by chat_session if ?chat_session=id)"""
+    serializer_class = ChatMessageSerializer
+
+    def get_queryset(self):
+        chat_session = self.request.query_params.get("chat_session")
+        qs = ChatMessage.objects.all().order_by("timestamp")
+        if chat_session:
+            qs = qs.filter(chat_session_id=chat_session)
+        return qs
+
+
+class ChatSessionMessagesView(generics.ListAPIView):
+    """List all messages in a specific chat session"""
+    serializer_class = ChatMessageSerializer
+
+    def get_queryset(self):
+        session_id = self.kwargs['pk']
+        return ChatMessage.objects.filter(chat_session_id=session_id).order_by("timestamp")
+
+
+class ChatSessionSendMessageView(APIView):
+    """Send a message to a specific chat session"""
+
+    def post(self, request, pk):
+        try:
+            session = ChatBot.objects.get(pk=pk)
+        except ChatBot.DoesNotExist:
+            return Response({"detail": "Chat session not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        data = {
+            "chat_session": session.id,
+            "sender": request.data.get("sender"),
+            "message": request.data.get("message"),
+        }
+        serializer = ChatMessageSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 # ============================================================================
 # FEEDBACK VIEWS
 # ============================================================================
 
 class FeedbackListCreateView(generics.ListCreateAPIView):
-    """List feedback or create new feedback"""
-    
-    def get_queryset(self):
-        if getattr(self, 'swagger_fake_view', False):
-            return Feedback.objects.none()
-        return Feedback.objects.filter(customer=self.request.user)
-    
-    def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return CreateFeedbackSerializer
-        return FeedbackSerializer
-    
-    def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
-
-
-class AllFeedbackView(generics.ListAPIView):
-    """List all feedback (Admin only)"""
-    queryset = Feedback.objects.filter(is_public=True)
+    """
+    GET: List feedback
+    POST: Create feedback (name + message only)
+    """
+    queryset = Feedback.objects.all().order_by('-id')
     serializer_class = FeedbackSerializer
+    permission_classes = [permissions.AllowAny] 
 
 
 class FeedbackDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update or delete feedback"""
+    """
+    GET: Retrieve a single feedback
+    PUT/PATCH/DELETE: Admin only
+    """
+    queryset = Feedback.objects.all()
     serializer_class = FeedbackSerializer
-    
-    def get_queryset(self):
-        return Feedback.objects.filter(customer=self.request.user)
+
+    def get_permissions(self):
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            return [permissions.AllowAny()]
+        return [permissions.AllowAny()]
 
 
 # ============================================================================
@@ -602,3 +824,32 @@ def search_rooms(request):
     
     serializer = RoomSerializer(rooms, many=True)
     return Response(serializer.data)
+
+
+class PromotionListCreateView(generics.ListCreateAPIView):
+    """
+    GET: List promotions (search/order supported)
+    POST: Create a promotion (admin only by default)
+    """
+    queryset = Promotion.objects.all()
+    serializer_class = PromotionSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['title', 'type']                # ?search=room
+    ordering_fields = ['created_at', 'number_orders']  # ?ordering=-promotion
+
+
+
+class PromotionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET: Retrieve a promotion
+    PUT/PATCH/DELETE: Update/remove (admin only)
+    """
+    queryset = Promotion.objects.all()
+    serializer_class = PromotionSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return [permissions.AllowAny()]
+        return [permissions.AllowAny()]

@@ -46,14 +46,18 @@ urlpatterns = [
     path('admin/orders/', views.AllOrdersView.as_view(), name='admin-order-list'),
     
     # Chat URLs
-    path('chat/session/', views.ChatSessionView.as_view(), name='chat-session'),
-    path('chat/message/', views.SendMessageView.as_view(), name='chat-message'),
-    path('chat/history/<str:session_id>/', views.ChatHistoryView.as_view(), name='chat-history'),
-    
+    path('chat/sessions/', views.ChatSessionListCreateView.as_view(), name='chat-session-list-create'),
+    path('chat/sessions/<int:pk>/', views.ChatSessionDetailView.as_view(), name='chat-session-detail'),
+
+    # Chat messages (global list/create)
+    path('chat/messages/', views.ChatMessageListCreateView.as_view(), name='chat-message-list-create'),
+
+    # Messages within a session
+    path('chat/sessions/<int:pk>/messages/', views.ChatSessionMessagesView.as_view(), name='chat-session-messages'),
+    path('chat/sessions/<int:pk>/send/', views.ChatSessionSendMessageView.as_view(), name='chat-session-send'),
     # Feedback URLs
     path('feedback/', views.FeedbackListCreateView.as_view(), name='feedback-list-create'),
     path('feedback/<int:pk>/', views.FeedbackDetailView.as_view(), name='feedback-detail'),
-    path('admin/feedback/', views.AllFeedbackView.as_view(), name='admin-feedback-list'),
     
     # AI Insights URLs
     path('insights/', views.AIInsightListView.as_view(), name='insight-list'),
@@ -61,6 +65,13 @@ urlpatterns = [
     
     # Dashboard URLs
     path('dashboard/stats/', views.dashboard_stats, name='dashboard-stats'),
-    
 
+    path('reservations/', views.ReservationListCreateView.as_view(), name='reservation-list-create'),
+    path('reservations/<int:pk>/', views.ReservationDetailView.as_view(), name='reservation-detail'),
+    path("reservations/<int:pk>/status/",views.ReservationStatusUpdateView.as_view(),name="reservation-status-update",),
+    
+    path('reservations/all_Reservation/', views.AllReservationView.as_view(), name='all-reservations'),
+
+    path('promotions/', views.PromotionListCreateView.as_view(), name='promotion-list-create'),
+    path('promotions/<int:pk>/', views.PromotionDetailView.as_view(), name='promotion-detail'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
