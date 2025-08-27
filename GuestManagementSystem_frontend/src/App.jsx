@@ -22,6 +22,7 @@ import FeedbackManagement from './components/Feedback/FeedbackManagement';
 import CustomerChat from './components/customer/CustomerChat';
 import AdminChatDashboard from './components/Chart/AdminChatDashboard';
 import CustomerOrders from './components/Order/CustomerOrders';
+import CustomerRecommendations from './components/Order/CustomerRecommendations';
 import './App.css'
 
 function App() {
@@ -35,7 +36,7 @@ function App() {
         <Route path="/roomsReservation" element={<RoomsReservation />} />
         <Route path="/customerChat" element={<CustomerChat />} />
         <Route path="/CustomerOrders" element={<CustomerOrders />} />
-
+        <Route path="/customerRecommendations" element={<CustomerRecommendations />} />
 
         <Route path="/dashboard" element={<Layout />}>
           <Route path="Admin-dashboard" element={<Dashboard />}></Route>

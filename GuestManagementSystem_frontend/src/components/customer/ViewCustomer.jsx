@@ -57,22 +57,37 @@ const AdminCustomersPage = () => {
     const LOYALTY_DISCOUNT_RATE = 0.05;
     const LOYALTY_ORDER_THRESHOLD = 3;
 
-    const loadPromotions = async () => {
-        try {
-            const response = await promotionService.getAllPromotions();
-            const promotionsData = response;
-            setPromotions(promotionsData);
-        } catch (err) {
-            console.error('Error loading promotions:', err);
-
-        }
-    };
-
     useEffect(() => {
-        loadCustomers();
-        loadPromotions();
-    }, []);
+        const fetchData = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
 
+                // Fetch both promotions and customers in parallel
+                const [promotionsResponse, customersResponse] = await Promise.all([
+                    promotionService.getAllPromotions(),
+                    customerService.getCustomers(),
+                ]);
+
+                const promotionsData = promotionsResponse;
+                const customersData = customersResponse.data || customersResponse;
+
+                // Update state
+                setPromotions(promotionsData);
+                setCustomers(customersData);
+
+                // Now calculate stats with both data available
+                await loadCustomerOrderStats(customersData, promotionsData);
+            } catch (err) {
+                toast.error('Failed to load data. Please try again.');
+                console.error('Error loading data:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
 
     const calculateLoyaltyDiscount = (totalSpent, orderCount) => {
         if (orderCount >= LOYALTY_ORDER_THRESHOLD) {
@@ -81,10 +96,10 @@ const AdminCustomersPage = () => {
         return 0;
     };
 
-    const calculatePromotionBenefit = (orderCount) => {
+    const calculatePromotionBenefit = (orderCount, promotionsData) => {
         let totalPromotionValue = 0;
         const applicablePromotions = [];
-        promotions.forEach(promotion => {
+        promotionsData.forEach(promotion => {
             if (orderCount >= promotion.number_orders && promotion.type === "product") {
                 const timesApplicable = Math.floor(orderCount / promotion.number_orders);
                 const promotionValue = timesApplicable * 10;
@@ -102,23 +117,7 @@ const AdminCustomersPage = () => {
         };
     };
 
-    const loadCustomers = async () => {
-        try {
-            setIsLoading(true);
-            setError(null);
-            const response = await customerService.getCustomers();
-            const customersData = response.data || response;
-            await loadCustomerOrderStats(customersData);
-            setCustomers(customersData);
-        } catch (err) {
-            toast.error('Failed to load customers. Please try again.');
-            console.error('Error loading customers:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const loadCustomerOrderStats = async (customersData) => {
+    const loadCustomerOrderStats = async (customersData, promotionsData) => {
         try {
             const stats = {};
             let totalDiscountGiven = 0;
@@ -130,13 +129,10 @@ const AdminCustomersPage = () => {
             const allOrdersResponse = await orderService.getAllOrders({});
             const allOrders = allOrdersResponse.results || allOrdersResponse.data || allOrdersResponse || [];
 
-
-
             await Promise.all(customersData.map(async (customer) => {
                 try {
                     // Filter orders for the current customer in the frontend
                     const customerOrders = allOrders.filter(order => order.customer.id === customer.id);
-
                     // Example: Filter orders from the last 30 days
                     const thirtyDaysAgo = new Date();
                     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -144,12 +140,11 @@ const AdminCustomersPage = () => {
                         const orderDate = new Date(order.created_at);
                         return orderDate >= thirtyDaysAgo;
                     });
-
                     const orderCount = filteredOrders.length;
                     const totalSpent = filteredOrders.reduce((sum, order) => sum + parseFloat(order.total_amount || 0), 0);
                     const isLoyalCustomer = orderCount >= LOYALTY_ORDER_THRESHOLD;
                     const loyaltyDiscount = calculateLoyaltyDiscount(totalSpent, orderCount);
-                    const promotionBenefit = calculatePromotionBenefit(orderCount, filteredOrders);
+                    const promotionBenefit = calculatePromotionBenefit(orderCount, promotionsData);
                     const totalDiscount = loyaltyDiscount + promotionBenefit.totalValue;
                     const finalAmount = Math.max(0, totalSpent - totalDiscount);
 
@@ -168,7 +163,6 @@ const AdminCustomersPage = () => {
                     if (isLoyalCustomer) {
                         loyalCustomerCount++;
                     }
-
                     totalDiscountGiven += totalDiscount;
                     totalOrders += orderCount;
                     totalPromotionsApplied += promotionBenefit.promotions.length;
@@ -201,7 +195,6 @@ const AdminCustomersPage = () => {
         }
     };
 
-
     const handleViewDetails = async (customer) => {
         setSelectedCustomerDetail(customer);
         setShowDetailModal(true);
@@ -215,8 +208,24 @@ const AdminCustomersPage = () => {
 
     const refreshCustomers = async () => {
         setIsRefreshing(true);
-        await loadData();
-        setIsRefreshing(false);
+        try {
+            const [promotionsResponse, customersResponse] = await Promise.all([
+                promotionService.getAllPromotions(),
+                customerService.getCustomers(),
+            ]);
+
+            const promotionsData = promotionsResponse;
+            const customersData = customersResponse.data || customersResponse;
+
+            setPromotions(promotionsData);
+            setCustomers(customersData);
+            await loadCustomerOrderStats(customersData, promotionsData);
+        } catch (err) {
+            toast.error('Failed to refresh data. Please try again.');
+            console.error('Error refreshing data:', err);
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const exportCustomers = () => {
@@ -245,6 +254,7 @@ const AdminCustomersPage = () => {
                 ];
             })
         ].map(row => row.join(',')).join('\n');
+
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -313,7 +323,7 @@ const AdminCustomersPage = () => {
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Error Loading Customers</h2>
                     <p className="text-gray-600 mb-4">{error}</p>
                     <button
-                        onClick={loadData}
+                        onClick={refreshCustomers}
                         className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
                     >
                         Try Again
@@ -356,7 +366,6 @@ const AdminCustomersPage = () => {
                     </div>
                 </div>
             </div>
-
             {/* Stats Dashboard */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -416,7 +425,6 @@ const AdminCustomersPage = () => {
                         </div>
                     </div>
                 </div>
-
                 {/* Rewards Program Info */}
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 mb-6">
                     <div className="flex items-center">
@@ -429,7 +437,6 @@ const AdminCustomersPage = () => {
                         </div>
                     </div>
                 </div>
-
                 {/* Filters and Search */}
                 <div className="bg-white rounded-lg shadow p-6 mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
@@ -474,7 +481,6 @@ const AdminCustomersPage = () => {
                         </div>
                     </div>
                 </div>
-
                 {/* Customers Table */}
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                     {isLoading ? (
@@ -641,7 +647,6 @@ const AdminCustomersPage = () => {
                                     </tbody>
                                 </table>
                             </div>
-
                             {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
@@ -721,7 +726,6 @@ const AdminCustomersPage = () => {
                     )}
                 </div>
             </div>
-
             {/* Click outside to close action menu */}
             {showActionMenu && (
                 <div
@@ -729,7 +733,6 @@ const AdminCustomersPage = () => {
                     onClick={() => setShowActionMenu(null)}
                 />
             )}
-
             {/* Customer Detail Modal */}
             {showDetailModal && selectedCustomerDetail && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
@@ -764,7 +767,6 @@ const AdminCustomersPage = () => {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-
                         {/* Modal Content */}
                         <div className="p-6">
                             {(() => {
@@ -800,7 +802,6 @@ const AdminCustomersPage = () => {
                                                 </div>
                                             </div>
                                         </div>
-
                                         {/* Status and Basic Info */}
                                         <div className="mb-8 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
                                             <div className="flex items-center justify-between mb-4">
@@ -825,7 +826,6 @@ const AdminCustomersPage = () => {
                                                     )}
                                                 </div>
                                             </div>
-
                                             {/* Quick Stats */}
                                             <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                                                 <div className="text-center p-3 bg-white rounded-lg shadow-sm">
@@ -865,7 +865,6 @@ const AdminCustomersPage = () => {
                                                 </div>
                                             </div>
                                         </div>
-
                                         {/* Applicable Promotions Section */}
                                         {stats.applicablePromotions && stats.applicablePromotions.length > 0 && (
                                             <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-lg">
@@ -896,7 +895,6 @@ const AdminCustomersPage = () => {
                                                 </div>
                                             </div>
                                         )}
-
                                         {/* Information Sections */}
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Contact Information */}
@@ -929,7 +927,6 @@ const AdminCustomersPage = () => {
                                                     </div>
                                                 </div>
                                             </div>
-
                                             {/* Personal Information */}
                                             <div className="bg-white border border-gray-200 rounded-lg p-6">
                                                 <div className="flex items-center mb-4">
@@ -955,7 +952,6 @@ const AdminCustomersPage = () => {
                                                     </div>
                                                 </div>
                                             </div>
-
                                             {/* Order & Rewards Statistics */}
                                             <div className="bg-white border border-gray-200 rounded-lg p-6">
                                                 <div className="flex items-center mb-4">
@@ -998,7 +994,6 @@ const AdminCustomersPage = () => {
                                                     )}
                                                 </div>
                                             </div>
-
                                             {/* Loyalty Program Status */}
                                             <div className="bg-white border border-gray-200 rounded-lg p-6">
                                                 <div className="flex items-center mb-4">
@@ -1052,7 +1047,6 @@ const AdminCustomersPage = () => {
                                                     )}
                                                 </div>
                                             </div>
-
                                             {/* Account Timeline */}
                                             <div className="bg-white border border-gray-200 rounded-lg p-6">
                                                 <div className="flex items-center mb-4">
@@ -1123,7 +1117,6 @@ const AdminCustomersPage = () => {
                                                     </div>
                                                 </div>
                                             </div>
-
                                             {/* Additional Details */}
                                             <div className="bg-white border border-gray-200 rounded-lg p-6">
                                                 <div className="flex items-center mb-4">
@@ -1186,7 +1179,6 @@ const AdminCustomersPage = () => {
                                 );
                             })()}
                         </div>
-
                         {/* Modal Footer */}
                         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 rounded-b-lg">
                             <div className="flex justify-between items-center">
@@ -1212,15 +1204,7 @@ const AdminCustomersPage = () => {
                                             VIP Report
                                         </button>
                                     )}
-                                    {customerOrderStats[selectedCustomerDetail.id]?.applicablePromotions?.length > 0 && (
-                                        <button className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
-                                            <Tag className="h-4 w-4 mr-2 inline" />
-                                            Promotions Report
-                                        </button>
-                                    )}
-                                    <button className="px-4 py-2 text-sm font-medium text-white bg-amber-600 border border-transparent rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors">
-                                        Export Details
-                                    </button>
+
                                 </div>
                             </div>
                         </div>
@@ -1228,7 +1212,6 @@ const AdminCustomersPage = () => {
                 </div>
             )}
         </div>
-
     );
 };
 

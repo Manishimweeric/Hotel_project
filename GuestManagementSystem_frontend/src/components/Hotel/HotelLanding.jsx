@@ -339,14 +339,13 @@ const HotelLandingPage = () => {
                         <div className="hidden md:flex items-center space-x-8">
                             <a href="#home" className="text-gray-700 hover:text-amber-600 transition-colors">Home</a>
                             <a href="#rooms" className="text-gray-700 hover:text-amber-600 transition-colors">Rooms</a>
-                            <a href="#contact" className="text-gray-700 hover:text-amber-600 transition-colors">Contact</a>
-
                             {isAuthenticated ? (
                                 <div className="flex items-center space-x-4">
                                     <div className="flex items-center space-x-2">
                                         <User className="h-5 w-5 text-gray-600" />
                                         <span className="text-sm text-gray-700">{user?.first_name || user?.email}</span>
                                     </div>
+                                    <a href="/customerRecommendations" className="text-gray-700 hover:text-amber-600 transition-colors">Recommendations</a>
                                     <a href="/customerChat" className="text-gray-700 hover:text-amber-600 transition-colors">Chart</a>
                                     <a href="/CustomerOrders" className="text-gray-700 hover:text-amber-600 transition-colors">Orders</a>
 
