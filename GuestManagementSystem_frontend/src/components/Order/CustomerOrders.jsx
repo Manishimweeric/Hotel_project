@@ -154,14 +154,6 @@ const CustomerOrdersPage = () => {
         };
         setStats(stats);
     };
-
-
-
-
-
-
-
-
     const handleViewDetails = async (order) => {
         try {
             setIsLoading(true);
